@@ -3,6 +3,7 @@ package com.example.novintix_backend.controller;
 import com.example.novintix_backend.dto.ProductRequest;
 import com.example.novintix_backend.dto.ProductResponse;
 import com.example.novintix_backend.service.ProductService;
+
 import jakarta.validation.Valid;
 
 import org.springframework.http.HttpStatus;
@@ -20,6 +21,7 @@ public class ProductController {
         this.productService = productService;
     }
 
+    // Get all products, optionally filtered by search
     @GetMapping
     public List<ProductResponse> getAll(
             @RequestParam(required = false) String search
@@ -27,11 +29,13 @@ public class ProductController {
         return productService.getAll(search);
     }
 
+    // Get a single product by ID
     @GetMapping("/{id}")
     public ProductResponse getById(@PathVariable Long id) {
         return productService.getById(id);
     }
 
+    // Create a new product
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ProductResponse create(
@@ -40,6 +44,7 @@ public class ProductController {
         return productService.create(request);
     }
 
+    // Update an existing product
     @PutMapping("/{id}")
     public ProductResponse update(
             @PathVariable Long id,
@@ -48,11 +53,13 @@ public class ProductController {
         return productService.update(id, request);
     }
 
+    // Deactivate a product
     @PatchMapping("/{id}/deactivate")
     public ProductResponse deactivate(@PathVariable Long id) {
         return productService.deactivate(id);
     }
 
+    // Activate a product
     @PatchMapping("/{id}/activate")
     public ProductResponse activate(@PathVariable Long id) {
         return productService.activate(id);

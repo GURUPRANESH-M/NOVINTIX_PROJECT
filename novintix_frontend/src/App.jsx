@@ -8,10 +8,12 @@ import {
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Customers from "./pages/Customers";
+import Products from "./pages/Products";
 
 import ProtectedRoute from "./components/ProtectedRoute";
 import { getCurrentUser } from "./services/authService";
 
+// Redirect authenticated users away from the login page.
 function LoginRoute() {
   const user = getCurrentUser();
 
@@ -32,13 +34,13 @@ export default function App() {
           element={<Navigate to="/login" replace />}
         />
 
-        {/* Login */}
+        {/* Login page */}
         <Route
           path="/login"
           element={<LoginRoute />}
         />
 
-        {/* Dashboard - Protected */}
+        {/* Dashboard */}
         <Route
           path="/dashboard"
           element={
@@ -48,7 +50,7 @@ export default function App() {
           }
         />
 
-        {/* Customer Management - Protected */}
+        {/* Customer Management */}
         <Route
           path="/customers"
           element={
@@ -58,7 +60,17 @@ export default function App() {
           }
         />
 
-        {/* Unknown routes */}
+        {/* Product Management */}
+        <Route
+          path="/products"
+          element={
+            <ProtectedRoute>
+              <Products />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Redirect unknown routes */}
         <Route
           path="*"
           element={<Navigate to="/dashboard" replace />}

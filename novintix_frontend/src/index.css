@@ -1580,3 +1580,22 @@ button:disabled {
     padding: 22px;
   }
 }
+.manage-products-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px 16px;
+  border: none;
+  border-radius: 8px;
+  background: #3563f5;
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.manage-products-button:hover {
+  background: #244bd0;
+}

@@ -1,3 +1,4 @@
+
 import { useNavigate } from "react-router-dom";
 
 import {
@@ -8,6 +9,7 @@ import {
   Package,
   Users,
   Building2,
+  Boxes,
 } from "lucide-react";
 
 import {
@@ -19,15 +21,23 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const user = getCurrentUser();
 
+  // Logout
   function handleLogout() {
     logout();
     navigate("/login", { replace: true });
   }
 
+  // Navigate to Customer Management
   function handleManageCustomers() {
     navigate("/customers");
   }
 
+  // Navigate to Product Management
+  function handleManageProducts() {
+    navigate("/products");
+  }
+
+  // Dashboard summary cards
   const cards = [
     {
       title: "Total Customers",
@@ -86,12 +96,12 @@ export default function Dashboard() {
             <h1>Welcome back!</h1>
 
             <p>
-              Manage your customers, orders, and credit
-              operations from one place.
+              Manage your customers, products, orders, and
+              credit operations from one place.
             </p>
           </div>
 
-          {/* Logged-in user */}
+          {/* Logged-in user information */}
           <div className="user-badge">
             <div className="user-avatar">
               {(user?.email?.[0] || "U").toUpperCase()}
@@ -109,7 +119,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Dashboard cards */}
+        {/* Dashboard summary cards */}
         <div className="dashboard-grid">
           {cards.map((card) => {
             const Icon = card.icon;
@@ -137,7 +147,7 @@ export default function Dashboard() {
           })}
         </div>
 
-        {/* Customer management navigation */}
+        {/* Customer Management */}
         <section className="getting-started">
           <div>
             <span className="welcome-label">
@@ -165,6 +175,37 @@ export default function Dashboard() {
 
           <div className="getting-started-icon">
             <Users size={30} />
+          </div>
+        </section>
+
+        {/* Product Management */}
+        <section className="getting-started">
+          <div>
+            <span className="welcome-label">
+              PRODUCT OPERATIONS
+            </span>
+
+            <h2>Manage your products</h2>
+
+            <p>
+              Maintain your medical product catalogue,
+              manage product details, and configure
+              standard product prices for customer orders.
+            </p>
+
+            <button
+              type="button"
+              className="manage-products-button"
+              onClick={handleManageProducts}
+            >
+              <Boxes size={18} />
+              Manage Products
+              <ArrowUpRight size={17} />
+            </button>
+          </div>
+
+          <div className="getting-started-icon">
+            <Package size={30} />
           </div>
         </section>
       </section>
