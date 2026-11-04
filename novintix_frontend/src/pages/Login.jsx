@@ -7,6 +7,7 @@ import {
   LockKeyhole,
   Mail,
   ShieldCheck,
+  KeyRound
 } from "lucide-react";
 
 import { login } from "../services/authService";
@@ -14,8 +15,9 @@ import { login } from "../services/authService";
 export default function Login() {
   const navigate = useNavigate();
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  // Pre-filled with demo credentials for easy testing
+  const [email, setEmail] = useState("admin@novintix.com");
+  const [password, setPassword] = useState("Admin@123456789");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -47,7 +49,7 @@ export default function Login() {
         setError("Please check the details you entered.");
       } else if (!err.response) {
         setError(
-          "Unable to connect to the server. Please try again."
+          "Unable to connect to the server. Please ensure the backend is running."
         );
       } else {
         setError("Login failed. Please try again later.");
@@ -55,6 +57,11 @@ export default function Login() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleAutoFill() {
+    setEmail("admin@novintix.com");
+    setPassword("Admin@123456789");
   }
 
   return (
@@ -121,6 +128,50 @@ export default function Login() {
             <p>
               Enter your credentials to access your workspace.
             </p>
+          </div>
+
+          {/* Test / Demo Credentials Banner */}
+          <div
+            style={{
+              padding: "12px 14px",
+              backgroundColor: "#f0fdf4",
+              border: "1px solid #bbf7d0",
+              borderRadius: "8px",
+              fontSize: "12px",
+              color: "#166534",
+              marginBottom: "20px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "6px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: "700" }}>
+                <KeyRound size={15} />
+                <span>Test / Demo Credentials:</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleAutoFill}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#15803d",
+                  textDecoration: "underline",
+                  cursor: "pointer",
+                  fontWeight: "700",
+                  fontSize: "11px",
+                }}
+              >
+                Auto-fill
+              </button>
+            </div>
+            <div>Email: <strong style={{ fontFamily: "monospace" }}>admin@novintix.com</strong></div>
+            <div>Password: <strong style={{ fontFamily: "monospace" }}>Admin@123456789</strong></div>
           </div>
 
           <form onSubmit={handleSubmit}>

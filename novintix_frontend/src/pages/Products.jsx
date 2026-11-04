@@ -1,3 +1,4 @@
+import Navbar from "../components/Navbar";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -200,21 +201,7 @@ export default function Products() {
 
     return (
         <main className="products-page">
-            <header className="products-header">
-                <button
-                    type="button"
-                    className="products-back-button"
-                    onClick={() => navigate("/dashboard")}
-                >
-                    <ArrowLeft size={17} />
-                    Dashboard
-                </button>
-
-                <div className="brand-logo">
-                    <span className="brand-mark">N</span>
-                    <span>NOVINTIX</span>
-                </div>
-            </header>
+            <Navbar />
 
             <section className="products-content">
                 <div className="products-heading">

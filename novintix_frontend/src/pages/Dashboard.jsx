@@ -1,120 +1,98 @@
-
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-
 import {
   Activity,
   ArrowUpRight,
   CreditCard,
-  LogOut,
   Package,
   Users,
   Building2,
   Boxes,
+  ShoppingCart,
+  BookOpen,
+  AlertTriangle,
+  Truck
 } from "lucide-react";
-
-import {
-  getCurrentUser,
-  logout,
-} from "../services/authService";
+import Navbar from "../components/Navbar";
+import { getCurrentUser } from "../services/authService";
+import dashboardService from "../services/dashboardService";
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const user = getCurrentUser();
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  // Logout
-  function handleLogout() {
-    logout();
-    navigate("/login", { replace: true });
-  }
+  useEffect(() => {
+    async function loadStats() {
+      try {
+        const res = await dashboardService.getStats();
+        setStats(res.data);
+      } catch (err) {
+        console.error("Failed to load dashboard metrics", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadStats();
+  }, []);
 
-  // Navigate to Customer Management
-  function handleManageCustomers() {
-    navigate("/customers");
-  }
-
-  // Navigate to Product Management
-  function handleManageProducts() {
-    navigate("/products");
-  }
-
-  // Dashboard summary cards
   const cards = [
     {
       title: "Total Customers",
-      value: "—",
-      description: "Customer records",
+      value: loading ? "..." : String(stats?.totalCustomers || 0),
+      description: "Hospitals & distributors",
       icon: Users,
+      link: "/customers",
     },
     {
-      title: "Credit Exposure",
-      value: "—",
-      description: "Outstanding commitments",
+      title: "Total Credit Exposure",
+      value: loading
+        ? "..."
+        : `$${Number(stats?.totalCreditExposure || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      description: "Unpaid invoices + open orders",
       icon: CreditCard,
+      link: "/ledger",
     },
     {
       title: "Open Orders",
-      value: "—",
-      description: "Orders being processed",
+      value: loading ? "..." : String(stats?.totalOrders || 0),
+      description: `${stats?.ordersOnHold || 0} order(s) on credit hold`,
       icon: Package,
+      alert: Number(stats?.ordersOnHold || 0) > 0,
+      link: "/orders",
     },
     {
-      title: "System Status",
-      value: "Online",
-      description: "Dashboard initialized",
-      icon: Activity,
+      title: "Total Shipments",
+      value: loading ? "..." : String(stats?.totalShipments || 0),
+      description: "Dispatched & invoiced shipments",
+      icon: Truck,
+      link: "/orders",
     },
   ];
 
   return (
     <main className="dashboard-page">
-      {/* Header */}
-      <header className="dashboard-header">
-        <div className="brand-logo dashboard-brand">
-          <span className="brand-mark">N</span>
-          <span>NOVINTIX</span>
-        </div>
+      <Navbar />
 
-        <button
-          type="button"
-          className="logout-button"
-          onClick={handleLogout}
-        >
-          <LogOut size={17} />
-          Sign out
-        </button>
-      </header>
-
-      {/* Dashboard content */}
       <section className="dashboard-content">
         {/* Welcome section */}
         <div className="dashboard-welcome">
           <div>
-            <span className="welcome-label">
-              YOUR WORKSPACE
-            </span>
-
+            <span className="welcome-label">CREDIT RISK & FULFILLMENT PLATFORM</span>
             <h1>Welcome back!</h1>
-
             <p>
-              Manage your customers, products, orders, and
-              credit operations from one place.
+              Manage hospital and distributor contract prices, monitor real-time credit limits, dispatch partial shipments, and maintain the money trail.
             </p>
           </div>
 
-          {/* Logged-in user information */}
           <div className="user-badge">
             <div className="user-avatar">
               {(user?.email?.[0] || "U").toUpperCase()}
             </div>
-
             <div>
-              <strong>
-                {user?.email || "User"}
-              </strong>
-
-              <span>
-                {user?.role || "USER"}
-              </span>
+              <strong>{user?.email || "User"}</strong>
+              <span>{user?.role || "USER"}</span>
             </div>
           </div>
         </div>
@@ -123,91 +101,136 @@ export default function Dashboard() {
         <div className="dashboard-grid">
           {cards.map((card) => {
             const Icon = card.icon;
-
             return (
               <article
                 className="dashboard-card"
                 key={card.title}
+                onClick={() => card.link && navigate(card.link)}
+                style={{ cursor: "pointer" }}
               >
                 <div className="card-top">
-                  <div className="card-icon">
+                  <div className="card-icon" style={{ backgroundColor: card.alert ? "#fef2f2" : undefined, color: card.alert ? "#dc2626" : undefined }}>
                     <Icon size={21} />
                   </div>
-
                   <ArrowUpRight size={18} />
                 </div>
 
                 <p>{card.title}</p>
-
-                <h2>{card.value}</h2>
-
-                <span>{card.description}</span>
+                <h2 style={{ color: card.alert ? "#dc2626" : undefined }}>{card.value}</h2>
+                <span style={{ color: card.alert ? "#e11d48" : undefined }}>{card.description}</span>
               </article>
             );
           })}
         </div>
 
-        {/* Customer Management */}
-        <section className="getting-started">
-          <div>
-            <span className="welcome-label">
-              CUSTOMER OPERATIONS
-            </span>
+        {/* Operational Modules Navigation */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginTop: "35px" }}>
+          {/* Orders & Partial Fulfillment */}
+          <section className="getting-started" style={{ margin: 0, cursor: "pointer" }} onClick={() => navigate("/orders")}>
+            <div>
+              <span className="welcome-label">SALES & CREDIT ENGINE</span>
+              <h2 style={{ fontSize: "19px" }}>Orders & Partial Shipments</h2>
+              <p style={{ fontSize: "13px" }}>
+                Price orders against contract pricing, enforce credit limits (with automatic hold for over-limit orders), and fulfill partial shipments with auto-invoicing.
+              </p>
+              <button
+                type="button"
+                className="manage-customers-button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate("/orders");
+                }}
+              >
+                <ShoppingCart size={17} />
+                Manage Orders & Shipments
+                <ArrowUpRight size={16} />
+              </button>
+            </div>
+            <div className="getting-started-icon">
+              <ShoppingCart size={28} />
+            </div>
+          </section>
 
-            <h2>Manage your customers</h2>
+          {/* Customer Ledger & Audit Trail */}
+          <section className="getting-started" style={{ margin: 0, cursor: "pointer" }} onClick={() => navigate("/ledger")}>
+            <div>
+              <span className="welcome-label">MONEY TRAIL AUDIT</span>
+              <h2 style={{ fontSize: "19px" }}>Customer Ledger & Statements</h2>
+              <p style={{ fontSize: "13px" }}>
+                Audit chronological money trail: Invoices for shipped goods, Payments received, and Credit Notes issued for damaged/near-expiry returns.
+              </p>
+              <button
+                type="button"
+                className="manage-products-button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate("/ledger");
+                }}
+              >
+                <BookOpen size={17} />
+                View Customer Ledger
+                <ArrowUpRight size={16} />
+              </button>
+            </div>
+            <div className="getting-started-icon">
+              <BookOpen size={28} />
+            </div>
+          </section>
+        </div>
 
-            <p>
-              Register hospitals and distributors, manage
-              customer details, and configure their credit
-              limits and payment terms.
-            </p>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginTop: "20px" }}>
+          {/* Customer Master */}
+          <section className="getting-started" style={{ margin: 0, cursor: "pointer" }} onClick={() => navigate("/customers")}>
+            <div>
+              <span className="welcome-label">CUSTOMER DIRECTORY</span>
+              <h2 style={{ fontSize: "19px" }}>Hospitals & Distributors</h2>
+              <p style={{ fontSize: "13px" }}>
+                Configure credit limits, payment terms (net 30/45/60), and manage customer master accounts.
+              </p>
+              <button
+                type="button"
+                className="manage-customers-button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate("/customers");
+                }}
+              >
+                <Building2 size={17} />
+                Manage Customers
+                <ArrowUpRight size={16} />
+              </button>
+            </div>
+            <div className="getting-started-icon">
+              <Users size={28} />
+            </div>
+          </section>
 
-            <button
-              type="button"
-              className="manage-customers-button"
-              onClick={handleManageCustomers}
-            >
-              <Building2 size={18} />
-              Manage Customers
-              <ArrowUpRight size={17} />
-            </button>
-          </div>
-
-          <div className="getting-started-icon">
-            <Users size={30} />
-          </div>
-        </section>
-
-        {/* Product Management */}
-        <section className="getting-started">
-          <div>
-            <span className="welcome-label">
-              PRODUCT OPERATIONS
-            </span>
-
-            <h2>Manage your products</h2>
-
-            <p>
-              Maintain your medical product catalogue,
-              manage product details, and configure
-              standard product prices for customer orders.
-            </p>
-
-            <button
-              type="button"
-              className="manage-products-button"
-              onClick={handleManageProducts}
-            >
-              <Boxes size={18} />
-              Manage Products
-              <ArrowUpRight size={17} />
-            </button>
-          </div>
-
-          <div className="getting-started-icon">
-            <Package size={30} />
-          </div>
-        </section>
+          {/* Product Master */}
+          <section className="getting-started" style={{ margin: 0, cursor: "pointer" }} onClick={() => navigate("/products")}>
+            <div>
+              <span className="welcome-label">PRODUCT CATALOGUE</span>
+              <h2 style={{ fontSize: "19px" }}>Medical Supplies & Pricing</h2>
+              <p style={{ fontSize: "13px" }}>
+                Maintain medical supplies catalog and standard catalog prices.
+              </p>
+              <button
+                type="button"
+                className="manage-products-button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate("/products");
+                }}
+              >
+                <Boxes size={17} />
+                Manage Products
+                <ArrowUpRight size={16} />
+              </button>
+            </div>
+            <div className="getting-started-icon">
+              <Package size={28} />
+            </div>
+          </section>
+        </div>
       </section>
     </main>
   );

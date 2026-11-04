@@ -9,6 +9,8 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Customers from "./pages/Customers";
 import Products from "./pages/Products";
+import Orders from "./pages/Orders";
+import Ledger from "./pages/Ledger";
 
 import ProtectedRoute from "./components/ProtectedRoute";
 import { getCurrentUser } from "./services/authService";
@@ -66,6 +68,26 @@ export default function App() {
           element={
             <ProtectedRoute>
               <Products />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Sales Orders & Partial Fulfillment */}
+        <Route
+          path="/orders"
+          element={
+            <ProtectedRoute>
+              <Orders />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Customer Ledger & Audit Trail */}
+        <Route
+          path="/ledger"
+          element={
+            <ProtectedRoute>
+              <Ledger />
             </ProtectedRoute>
           }
         />

@@ -1,15 +1,21 @@
+import Navbar from "../components/Navbar";
 import { useEffect, useState } from "react";
 import {
-    ArrowLeft,
     Building2,
     Plus,
     Search,
     Pencil,
     Ban,
     X,
+    Tag,
+    Check,
+    RotateCcw,
+    Percent,
+    DollarSign
 } from "lucide-react";
 
 import customerService from "../services/customerService";
+import contractService from "../services/contractService";
 
 const emptyForm = {
     customerCode: "",
@@ -37,6 +43,14 @@ export default function Customers() {
     const [formError, setFormError] = useState("");
     const [success, setSuccess] = useState("");
 
+    // Negotiated Special Pricing Modal states
+    const [showPricingModal, setShowPricingModal] = useState(false);
+    const [pricingCustomer, setPricingCustomer] = useState(null);
+    const [pricingMatrix, setPricingMatrix] = useState([]);
+    const [pricingLoading, setPricingLoading] = useState(false);
+    const [editedPrices, setEditedPrices] = useState({});
+    const [pricingSavingId, setPricingSavingId] = useState(null);
+
     async function loadCustomers(searchTerm = search) {
         setLoading(true);
         setError("");
@@ -57,13 +71,10 @@ export default function Customers() {
 
     useEffect(() => {
         loadCustomers("");
-        // Initial load only; search is handled by the submit handler.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     function handleChange(event) {
         const { name, value } = event.target;
-
         setForm((current) => ({
             ...current,
             [name]: value,
@@ -80,7 +91,6 @@ export default function Customers() {
 
     function openEditForm(customer) {
         setEditingId(customer.id);
-
         setForm({
             customerCode: customer.customerCode,
             companyName: customer.companyName,
@@ -93,7 +103,6 @@ export default function Customers() {
             creditLimit: String(customer.creditLimit),
             paymentTermsDays: String(customer.paymentTermsDays),
         });
-
         setFormError("");
         setSuccess("");
         setShowForm(true);
@@ -126,15 +135,13 @@ export default function Customers() {
                 await customerService.create(payload);
                 setSuccess("Customer created successfully.");
             }
-
             setShowForm(false);
-            setForm(emptyForm);
             await loadCustomers();
         } catch (err) {
             setFormError(
                 err.response?.data?.detail ||
                 err.response?.data?.message ||
-                "Unable to save customer. Check the submitted information."
+                "Unable to save customer. Please check the values and try again."
             );
         } finally {
             setSaving(false);
@@ -143,9 +150,8 @@ export default function Customers() {
 
     async function handleDeactivate(customer) {
         const confirmed = window.confirm(
-            `Deactivate ${customer.companyName}?`
+            `Are you sure you want to deactivate ${customer.companyName}?`
         );
-
         if (!confirmed) return;
 
         setError("");
@@ -169,26 +175,83 @@ export default function Customers() {
         await loadCustomers(search);
     }
 
+    // SPECIAL PRICING MODAL HANDLERS
+    async function openPricingModal(customer) {
+        setPricingCustomer(customer);
+        setShowPricingModal(true);
+        setPricingLoading(true);
+        try {
+            const res = await contractService.getPricingMatrix(customer.id);
+            const matrix = res.data || [];
+            setPricingMatrix(matrix);
+
+            // Populate initial input values
+            const initialMap = {};
+            matrix.forEach((item) => {
+                initialMap[item.productId] = item.negotiatedPrice != null ? String(item.negotiatedPrice) : "";
+            });
+            setEditedPrices(initialMap);
+        } catch (err) {
+            console.error("Failed to load customer pricing matrix", err);
+        } finally {
+            setPricingLoading(false);
+        }
+    }
+
+    async function handleSaveSpecialPrice(item) {
+        const inputVal = editedPrices[item.productId];
+        if (!inputVal || Number(inputVal) <= 0) {
+            alert("Please enter a valid price greater than zero.");
+            return;
+        }
+
+        setPricingSavingId(item.productId);
+        try {
+            await contractService.save({
+                customerId: pricingCustomer.id,
+                productId: item.productId,
+                contractPrice: Number(inputVal),
+            });
+            // Refresh matrix
+            const res = await contractService.getPricingMatrix(pricingCustomer.id);
+            setPricingMatrix(res.data || []);
+            setSuccess(`Special price of $${Number(inputVal).toFixed(2)} agreed for ${item.productName}!`);
+        } catch (err) {
+            alert("Failed to save special contract price.");
+        } finally {
+            setPricingSavingId(null);
+        }
+    }
+
+    async function handleResetToStandard(item) {
+        if (!item.contractPriceId) return;
+        const confirmReset = window.confirm(`Reset ${item.productName} back to standard catalog price of $${item.standardPrice}?`);
+        if (!confirmReset) return;
+
+        setPricingSavingId(item.productId);
+        try {
+            await contractService.delete(item.contractPriceId);
+            const res = await contractService.getPricingMatrix(pricingCustomer.id);
+            setPricingMatrix(res.data || []);
+            setEditedPrices((prev) => ({ ...prev, [item.productId]: "" }));
+            setSuccess(`Reset ${item.productName} to standard catalog price.`);
+        } catch (err) {
+            alert("Failed to reset price.");
+        } finally {
+            setPricingSavingId(null);
+        }
+    }
+
     return (
         <div className="customers-page">
-            <header className="customers-topbar">
-                <a href="/dashboard" className="back-link">
-                    <ArrowLeft size={18} />
-                    Dashboard
-                </a>
-
-                <div className="customers-brand">
-                    <span className="brand-mark">N</span>
-                    <span>NOVINTIX</span>
-                </div>
-            </header>
+            <Navbar />
 
             <main className="customers-content">
                 <div className="customers-heading">
                     <div>
                         <span className="eyebrow">CUSTOMER OPERATIONS</span>
                         <h1>Customers</h1>
-                        <p>Manage hospitals, distributors, and their credit limits.</p>
+                        <p>Manage hospitals, distributors, credit limits, and negotiated contract prices.</p>
                     </div>
 
                     <button className="primary-button" onClick={openCreateForm}>
@@ -197,45 +260,28 @@ export default function Customers() {
                     </button>
                 </div>
 
-                <section className="customers-summary">
-                    <div className="summary-icon">
-                        <Building2 size={22} />
-                    </div>
+                {error && <div className="error-message">{error}</div>}
+                {success && <div className="success-banner" style={{ padding: "12px 16px", backgroundColor: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px", color: "#15803d", marginBottom: "20px" }}>{success}</div>}
 
-                    <div>
-                        <span>Total customers shown</span>
-                        <strong>{customers.length}</strong>
-                    </div>
+                <section className="customers-toolbar">
+                    <form onSubmit={handleSearch} className="search-form">
+                        <Search size={18} />
+                        <input
+                            type="text"
+                            placeholder="Search by name or customer code..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                        />
+                    </form>
                 </section>
 
-                {success && (
-                    <div className="notice notice-success">{success}</div>
-                )}
-
-                {error && (
-                    <div className="notice notice-error">{error}</div>
-                )}
-
-                <section className="customers-panel">
-                    <form className="customer-search" onSubmit={handleSearch}>
-                        <Search size={19} />
-
-                        <input
-                            value={search}
-                            onChange={(event) => setSearch(event.target.value)}
-                            placeholder="Search by company name or customer code..."
-                            aria-label="Search customers"
-                        />
-
-                        <button type="submit" className="secondary-button">
-                            Search
-                        </button>
-                    </form>
-
+                <section className="customers-table-section">
                     {loading ? (
-                        <div className="customer-state">Loading customers...</div>
+                        <div className="empty-state">
+                            <p>Loading customers...</p>
+                        </div>
                     ) : customers.length === 0 ? (
-                        <div className="customer-state">
+                        <div className="empty-state">
                             <Building2 size={36} />
                             <h3>No customers found</h3>
                             <p>Add a customer or try a different search.</p>
@@ -269,7 +315,18 @@ export default function Customers() {
                                             </td>
 
                                             <td>{customer.customerCode}</td>
-                                            <td>{customer.customerType}</td>
+                                            <td>
+                                                <span style={{
+                                                    padding: "3px 8px",
+                                                    borderRadius: "12px",
+                                                    fontSize: "11px",
+                                                    fontWeight: "700",
+                                                    backgroundColor: customer.customerType === "HOSPITAL" ? "#eff6ff" : "#fef3c7",
+                                                    color: customer.customerType === "HOSPITAL" ? "#1d4ed8" : "#b45309"
+                                                }}>
+                                                    {customer.customerType}
+                                                </span>
+                                            </td>
                                             <td>
                                                 <div>{customer.contactPerson}</div>
                                                 <div className="customer-email">
@@ -277,37 +334,53 @@ export default function Customers() {
                                                 </div>
                                             </td>
 
-                                            <td>
-                                                {Number(customer.creditLimit).toLocaleString(
-                                                    "en-IN",
-                                                    {
-                                                        style: "currency",
-                                                        currency: "INR",
-                                                        maximumFractionDigits: 2,
-                                                    }
-                                                )}
+                                            <td style={{ fontWeight: "700", color: "#0f172a" }}>
+                                                ${Number(customer.creditLimit).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                             </td>
 
                                             <td>Net {customer.paymentTermsDays}</td>
 
                                             <td>
                                                 <span
-                                                    className={`status-pill ${customer.active ? "active" : "inactive"
-                                                        }`}
+                                                    className={`status-pill ${customer.active ? "active" : "inactive"}`}
                                                 >
                                                     {customer.active ? "Active" : "Inactive"}
                                                 </span>
                                             </td>
 
                                             <td>
-                                                <div className="customer-actions">
+                                                <div className="customer-actions" style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                                                    {/* NEGOTIATED CONTRACT PRICING BUTTON */}
                                                     <button
                                                         type="button"
                                                         className="icon-button"
-                                                        title="Edit customer"
+                                                        title="Negotiate Special Contract Prices"
+                                                        onClick={() => openPricingModal(customer)}
+                                                        style={{
+                                                            color: "#2563eb",
+                                                            backgroundColor: "#eff6ff",
+                                                            border: "1px solid #bfdbfe",
+                                                            display: "inline-flex",
+                                                            alignItems: "center",
+                                                            gap: "4px",
+                                                            padding: "5px 9px",
+                                                            borderRadius: "6px",
+                                                            fontSize: "12px",
+                                                            fontWeight: "600",
+                                                            cursor: "pointer"
+                                                        }}
+                                                    >
+                                                        <Tag size={14} />
+                                                        <span>Special Pricing</span>
+                                                    </button>
+
+                                                    <button
+                                                        type="button"
+                                                        className="icon-button"
+                                                        title="Edit customer details"
                                                         onClick={() => openEditForm(customer)}
                                                     >
-                                                        <Pencil size={16} />
+                                                        <Pencil size={15} />
                                                     </button>
 
                                                     {customer.active && (
@@ -317,7 +390,7 @@ export default function Customers() {
                                                             title="Deactivate customer"
                                                             onClick={() => handleDeactivate(customer)}
                                                         >
-                                                            <Ban size={16} />
+                                                            <Ban size={15} />
                                                         </button>
                                                     )}
                                                 </div>
@@ -331,6 +404,7 @@ export default function Customers() {
                 </section>
             </main>
 
+            {/* CREATE / EDIT CUSTOMER MODAL */}
             {showForm && (
                 <div
                     className="modal-backdrop"
@@ -370,132 +444,163 @@ export default function Customers() {
                         </div>
 
                         {formError && (
-                            <div className="notice notice-error">{formError}</div>
+                            <div className="error-message">{formError}</div>
                         )}
 
-                        <form onSubmit={handleSubmit}>
+                        <form onSubmit={handleSubmit} className="customer-form">
                             <div className="form-grid">
-                                <label>
-                                    Customer code *
+                                <div className="form-group">
+                                    <label htmlFor="customerCode">
+                                        Customer code *
+                                    </label>
                                     <input
+                                        id="customerCode"
                                         name="customerCode"
+                                        type="text"
+                                        required
                                         value={form.customerCode}
                                         onChange={handleChange}
-                                        maxLength={30}
-                                        required
+                                        placeholder="e.g. CUST-HOSP-01"
                                     />
-                                </label>
+                                </div>
 
-                                <label>
-                                    Company name *
+                                <div className="form-group">
+                                    <label htmlFor="companyName">
+                                        Company / Facility name *
+                                    </label>
                                     <input
+                                        id="companyName"
                                         name="companyName"
+                                        type="text"
+                                        required
                                         value={form.companyName}
                                         onChange={handleChange}
-                                        maxLength={150}
-                                        required
+                                        placeholder="e.g. Apollo City Hospital"
                                     />
-                                </label>
+                                </div>
 
-                                <label>
-                                    Customer type *
+                                <div className="form-group">
+                                    <label htmlFor="customerType">
+                                        Customer type *
+                                    </label>
                                     <select
+                                        id="customerType"
                                         name="customerType"
                                         value={form.customerType}
                                         onChange={handleChange}
-                                        required
                                     >
-                                        <option value="HOSPITAL">Hospital</option>
-                                        <option value="DISTRIBUTOR">Distributor</option>
+                                        <option value="HOSPITAL">
+                                            Hospital
+                                        </option>
+                                        <option value="DISTRIBUTOR">
+                                            Distributor
+                                        </option>
                                     </select>
-                                </label>
+                                </div>
 
-                                <label>
-                                    Contact person *
+                                <div className="form-group">
+                                    <label htmlFor="contactPerson">
+                                        Contact person *
+                                    </label>
                                     <input
+                                        id="contactPerson"
                                         name="contactPerson"
+                                        type="text"
+                                        required
                                         value={form.contactPerson}
                                         onChange={handleChange}
-                                        maxLength={100}
-                                        required
+                                        placeholder="Dr. Rajesh Sharma"
                                     />
-                                </label>
+                                </div>
 
-                                <label>
-                                    Email *
+                                <div className="form-group">
+                                    <label htmlFor="email">Email *</label>
                                     <input
-                                        type="email"
+                                        id="email"
                                         name="email"
+                                        type="email"
+                                        required
                                         value={form.email}
                                         onChange={handleChange}
-                                        maxLength={150}
-                                        required
+                                        placeholder="purchase@facility.org"
                                     />
-                                </label>
+                                </div>
 
-                                <label>
-                                    Phone *
+                                <div className="form-group">
+                                    <label htmlFor="phone">Phone *</label>
                                     <input
-                                        type="tel"
+                                        id="phone"
                                         name="phone"
+                                        type="text"
+                                        required
                                         value={form.phone}
                                         onChange={handleChange}
-                                        minLength={7}
-                                        maxLength={20}
-                                        required
+                                        placeholder="+91 98450 11223"
                                     />
-                                </label>
+                                </div>
 
-                                <label>
-                                    Credit limit (₹) *
+                                <div className="form-group">
+                                    <label htmlFor="creditLimit">
+                                        Credit limit ($) *
+                                    </label>
                                     <input
-                                        type="number"
+                                        id="creditLimit"
                                         name="creditLimit"
-                                        value={form.creditLimit}
-                                        onChange={handleChange}
+                                        type="number"
                                         min="0"
                                         step="0.01"
                                         required
+                                        value={form.creditLimit}
+                                        onChange={handleChange}
+                                        placeholder="10000.00"
                                     />
-                                </label>
+                                </div>
 
-                                <label>
-                                    Payment terms (days) *
+                                <div className="form-group">
+                                    <label htmlFor="paymentTermsDays">
+                                        Payment terms (Days) *
+                                    </label>
                                     <input
-                                        type="number"
+                                        id="paymentTermsDays"
                                         name="paymentTermsDays"
+                                        type="number"
+                                        min="0"
+                                        required
                                         value={form.paymentTermsDays}
                                         onChange={handleChange}
-                                        min="0"
-                                        max="365"
-                                        step="1"
-                                        required
+                                        placeholder="30"
                                     />
-                                </label>
+                                </div>
 
-                                <label className="full-width">
-                                    Billing address *
-                                    <textarea
+                                <div className="form-group full-width">
+                                    <label htmlFor="billingAddress">
+                                        Billing address *
+                                    </label>
+                                    <input
+                                        id="billingAddress"
                                         name="billingAddress"
+                                        type="text"
+                                        required
                                         value={form.billingAddress}
                                         onChange={handleChange}
-                                        maxLength={500}
-                                        rows={2}
-                                        required
+                                        placeholder="14 Greams Road, Chennai"
                                     />
-                                </label>
+                                </div>
 
-                                <label className="full-width">
-                                    Shipping address *
-                                    <textarea
+                                <div className="form-group full-width">
+                                    <label htmlFor="shippingAddress">
+                                        Shipping address *
+                                    </label>
+                                    <input
+                                        id="shippingAddress"
                                         name="shippingAddress"
+                                        type="text"
+                                        required
                                         value={form.shippingAddress}
                                         onChange={handleChange}
-                                        maxLength={500}
-                                        rows={2}
-                                        required
+                                        placeholder="Central Medical Store Receiving, Gate 2"
                                     />
-                                </label>
+                                </div>
                             </div>
 
                             <div className="modal-actions">
@@ -522,6 +627,227 @@ export default function Customers() {
                             </div>
                         </form>
                     </section>
+                </div>
+            )}
+
+            {/* SPECIAL NEGOTIATED CONTRACT PRICING MODAL */}
+            {showPricingModal && pricingCustomer && (
+                <div
+                    style={{
+                        position: "fixed",
+                        inset: 0,
+                        backgroundColor: "rgba(15, 23, 42, 0.6)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        zIndex: 1000,
+                        padding: "20px",
+                    }}
+                >
+                    <div
+                        style={{
+                            backgroundColor: "white",
+                            borderRadius: "14px",
+                            width: "100%",
+                            maxWidth: "850px",
+                            maxHeight: "90vh",
+                            overflowY: "auto",
+                            padding: "30px",
+                            boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1)",
+                        }}
+                    >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "20px" }}>
+                            <div>
+                                <span style={{ fontSize: "11px", fontWeight: "800", color: "#2563eb", letterSpacing: "1px", textTransform: "uppercase" }}>
+                                    CONTRACT PRICING AGREEMENT
+                                </span>
+                                <h2 style={{ margin: "4px 0", fontSize: "22px", fontWeight: "800", color: "#0f172a" }}>
+                                    Special Negotiated Prices for {pricingCustomer.companyName}
+                                </h2>
+                                <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>
+                                    Set customer-specific contract prices. When placing orders, the system automatically uses these negotiated rates instead of the standard catalog price.
+                                </p>
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={() => setShowPricingModal(false)}
+                                style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8" }}
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {pricingLoading ? (
+                            <div style={{ padding: "40px", textAlign: "center", color: "#64748b" }}>
+                                Loading pricing matrix...
+                            </div>
+                        ) : pricingMatrix.length === 0 ? (
+                            <div style={{ padding: "40px", textAlign: "center", color: "#64748b" }}>
+                                No products found in the catalog.
+                            </div>
+                        ) : (
+                            <div style={{ border: "1px solid #e2e8f0", borderRadius: "10px", overflow: "hidden" }}>
+                                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px", textAlign: "left" }}>
+                                    <thead>
+                                        <tr style={{ backgroundColor: "#f8fafc", borderBottom: "1px solid #e2e8f0", color: "#475569" }}>
+                                            <th style={{ padding: "12px 16px", fontWeight: "600" }}>Product</th>
+                                            <th style={{ padding: "12px 16px", fontWeight: "600" }}>Standard Catalog Price</th>
+                                            <th style={{ padding: "12px 16px", fontWeight: "600" }}>Negotiated Special Price</th>
+                                            <th style={{ padding: "12px 16px", fontWeight: "600" }}>Discount / Terms</th>
+                                            <th style={{ padding: "12px 16px", fontWeight: "600", textAlign: "right" }}>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {pricingMatrix.map((item) => {
+                                            const enteredVal = editedPrices[item.productId] ?? "";
+                                            const isSaving = pricingSavingId === item.productId;
+                                            const standard = Number(item.standardPrice) || 0;
+                                            const enteredNum = Number(enteredVal) || 0;
+                                            const liveDiscount = (standard > 0 && enteredNum > 0)
+                                                ? Math.round(((standard - enteredNum) / standard) * 100)
+                                                : 0;
+
+                                            return (
+                                                <tr key={item.productId} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                                                    <td style={{ padding: "12px 16px" }}>
+                                                        <div style={{ fontWeight: "700", color: "#1e293b" }}>{item.productName}</div>
+                                                        <span style={{ fontSize: "11px", color: "#94a3b8" }}>{item.productCode}</span>
+                                                    </td>
+
+                                                    <td style={{ padding: "12px 16px", color: "#64748b", fontWeight: "600" }}>
+                                                        ${standard.toFixed(2)}
+                                                    </td>
+
+                                                    <td style={{ padding: "12px 16px" }}>
+                                                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                                            <span style={{ color: "#64748b", fontWeight: "700" }}>$</span>
+                                                            <input
+                                                                type="number"
+                                                                step="0.01"
+                                                                min="0.01"
+                                                                placeholder={standard.toFixed(2)}
+                                                                value={enteredVal}
+                                                                onChange={(e) => {
+                                                                    setEditedPrices({
+                                                                        ...editedPrices,
+                                                                        [item.productId]: e.target.value,
+                                                                    });
+                                                                }}
+                                                                style={{
+                                                                    width: "110px",
+                                                                    padding: "6px 10px",
+                                                                    borderRadius: "6px",
+                                                                    border: item.hasSpecialPrice ? "2px solid #3b82f6" : "1px solid #cbd5e1",
+                                                                    fontWeight: "700",
+                                                                    fontSize: "14px",
+                                                                    color: item.hasSpecialPrice ? "#1d4ed8" : "#0f172a",
+                                                                    backgroundColor: item.hasSpecialPrice ? "#eff6ff" : "white",
+                                                                }}
+                                                            />
+                                                        </div>
+                                                    </td>
+
+                                                    <td style={{ padding: "12px 16px" }}>
+                                                        {item.hasSpecialPrice ? (
+                                                            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                                                <span style={{
+                                                                    padding: "3px 8px",
+                                                                    borderRadius: "12px",
+                                                                    fontSize: "11px",
+                                                                    fontWeight: "700",
+                                                                    backgroundColor: item.discountPercentage > 0 ? "#ecfdf5" : "#f1f5f9",
+                                                                    color: item.discountPercentage > 0 ? "#059669" : "#475569"
+                                                                }}>
+                                                                    {item.discountPercentage > 0 ? `${item.discountPercentage}% OFF` : "Contract Active"}
+                                                                </span>
+                                                            </div>
+                                                        ) : enteredNum > 0 && enteredNum < standard ? (
+                                                            <span style={{ fontSize: "11px", color: "#d97706", fontWeight: "600" }}>
+                                                                Will save {liveDiscount}%
+                                                            </span>
+                                                        ) : (
+                                                            <span style={{ fontSize: "11px", color: "#94a3b8" }}>Standard List Rate</span>
+                                                        )}
+                                                    </td>
+
+                                                    <td style={{ padding: "12px 16px", textAlign: "right" }}>
+                                                        <div style={{ display: "inline-flex", gap: "6px" }}>
+                                                            <button
+                                                                type="button"
+                                                                disabled={isSaving || !enteredVal}
+                                                                onClick={() => handleSaveSpecialPrice(item)}
+                                                                style={{
+                                                                    display: "inline-flex",
+                                                                    alignItems: "center",
+                                                                    gap: "4px",
+                                                                    padding: "6px 12px",
+                                                                    borderRadius: "6px",
+                                                                    border: "none",
+                                                                    backgroundColor: "#2563eb",
+                                                                    color: "white",
+                                                                    fontSize: "12px",
+                                                                    fontWeight: "700",
+                                                                    cursor: isSaving || !enteredVal ? "not-allowed" : "pointer",
+                                                                    opacity: isSaving || !enteredVal ? 0.6 : 1,
+                                                                }}
+                                                            >
+                                                                <Check size={13} />
+                                                                {isSaving ? "Saving..." : "Save Agreement"}
+                                                            </button>
+
+                                                            {item.hasSpecialPrice && (
+                                                                <button
+                                                                    type="button"
+                                                                    disabled={isSaving}
+                                                                    onClick={() => handleResetToStandard(item)}
+                                                                    style={{
+                                                                        display: "inline-flex",
+                                                                        alignItems: "center",
+                                                                        gap: "4px",
+                                                                        padding: "6px 10px",
+                                                                        borderRadius: "6px",
+                                                                        border: "1px solid #e2e8f0",
+                                                                        backgroundColor: "white",
+                                                                        color: "#64748b",
+                                                                        fontSize: "12px",
+                                                                        fontWeight: "600",
+                                                                        cursor: isSaving ? "not-allowed" : "pointer",
+                                                                    }}
+                                                                    title="Revert back to catalog list price"
+                                                                >
+                                                                    <RotateCcw size={13} />
+                                                                    Reset
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+
+                        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "20px" }}>
+                            <button
+                                type="button"
+                                onClick={() => setShowPricingModal(false)}
+                                style={{
+                                    padding: "8px 18px",
+                                    borderRadius: "8px",
+                                    border: "1px solid #cbd5e1",
+                                    backgroundColor: "white",
+                                    color: "#475569",
+                                    fontWeight: "600",
+                                    cursor: "pointer",
+                                }}
+                            >
+                                Done
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
